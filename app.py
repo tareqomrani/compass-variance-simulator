@@ -1,5 +1,3 @@
-# 🧭 UAV Compass Variance Simulator
-
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,10 +9,10 @@ import time
 # ─────────────────────────────────────────────────────
 st.set_page_config(page_title="🧭 UAV Compass Variance Simulator", layout="wide")
 st.title("🧭 UAV Compass Variance Simulator")
-st.caption("Live magnetic vs true heading visualizer with drift estimation and variance logging.")
+st.caption("Live heading visualization, AI response logic, and drift prediction.")
 
 # ─────────────────────────────────────────────────────
-# Session State Initialization
+# State Initialization
 # ─────────────────────────────────────────────────────
 if "variance_log" not in st.session_state:
     st.session_state.variance_log = []
@@ -23,11 +21,11 @@ if "start_time" not in st.session_state:
     st.session_state.start_time = time.time()
 
 # ─────────────────────────────────────────────────────
-# Heading & Variance Simulation
+# Inputs & Variance Modeling
 # ─────────────────────────────────────────────────────
 true_heading = st.slider("🧭 True Heading (°)", 0, 359, 90)
 
-error_source = st.radio("📡 Simulated Source of Compass Error", [
+error_source = st.radio("📡 Simulated Compass Error Source", [
     "None", "EMI", "Nearby Metal", "Poor Calibration"
 ])
 
@@ -46,45 +44,72 @@ mag_heading = (true_heading + variance) % 360
 st.metric("📍 Compass Variance", f"{variance:.2f}°")
 
 # ─────────────────────────────────────────────────────
-# Drift Estimation (per km)
+# Drift Estimation + AI Autopilot Response
 # ─────────────────────────────────────────────────────
-drift_distance = np.tan(np.radians(abs(variance))) * 1000
-st.markdown(f"### 🔀 Predicted Drift: **{drift_distance:.1f} m** per 1 km")
+drift_per_km = np.tan(np.radians(abs(variance))) * 1000
+st.markdown(f"### 🔀 Predicted Drift: **{drift_per_km:.1f} m per 1 km**")
+
+# AI response
+if drift_per_km < 50:
+    st.success("🧠 Autopilot: Heading nominal ✅")
+elif drift_per_km < 150:
+    st.warning("🧠 Autopilot: Drift warning ⚠️ — advise recalibration")
+else:
+    st.error("🧠 Autopilot: Critical drift 🚨 — initiating Return to Base (RTB)")
 
 # ─────────────────────────────────────────────────────
-# Compass Visualization
+# Compass UI
 # ─────────────────────────────────────────────────────
 def draw_compass(true_hdg, mag_hdg):
     fig, ax = plt.subplots(figsize=(4, 4))
-    ax.set_xlim(-1.2, 1.2)
-    ax.set_ylim(-1.2, 1.2)
+    ax.set_xlim(-1.3, 1.3)
+    ax.set_ylim(-1.3, 1.3)
     ax.set_aspect('equal')
     ax.axis('off')
 
-    # Compass circle
-    compass = plt.Circle((0, 0), 1, fill=False, linewidth=2)
-    ax.add_patch(compass)
+    ax.add_patch(plt.Circle((0, 0), 1, fill=False, linewidth=2))
+    ax.text(0, 1.08, 'N', ha='center', fontsize=12, weight='bold')
+    ax.text(0, -1.15, 'S', ha='center', fontsize=12)
+    ax.text(1.15, 0, 'E', va='center', fontsize=12)
+    ax.text(-1.18, 0, 'W', va='center', fontsize=12)
 
-    # Cardinal directions
-    ax.text(0, 1.05, 'N', ha='center', fontsize=12, weight='bold')
-    ax.text(0, -1.1, 'S', ha='center', fontsize=12)
-    ax.text(1.1, 0, 'E', va='center', fontsize=12)
-    ax.text(-1.1, 0, 'W', va='center', fontsize=12)
-
-    # True Heading (blue)
     angle_true = np.radians(90 - true_hdg)
-    ax.arrow(0, 0, 0.8 * np.cos(angle_true), 0.8 * np.sin(angle_true),
-             head_width=0.05, head_length=0.1, fc='blue', ec='blue', label='True')
-
-    # Magnetic Heading (red)
     angle_mag = np.radians(90 - mag_hdg)
-    ax.arrow(0, 0, 0.8 * np.cos(angle_mag), 0.8 * np.sin(angle_mag),
-             head_width=0.05, head_length=0.1, fc='red', ec='red', label='Magnetic')
 
-    ax.legend(["True", "Magnetic"], loc="lower center")
+    # Arrows
+    ax.arrow(0, 0, 0.8 * np.cos(angle_true), 0.8 * np.sin(angle_true),
+             head_width=0.05, head_length=0.1, fc='blue', ec='blue')
+    ax.arrow(0, 0, 0.8 * np.cos(angle_mag), 0.8 * np.sin(angle_mag),
+             head_width=0.05, head_length=0.1, fc='red', ec='red')
+
+    # Custom legend
+    h1, = ax.plot([], [], color='blue', linewidth=5)
+    h2, = ax.plot([], [], color='red', linewidth=5)
+    ax.legend([h1, h2], ["True (Blue)", "Magnetic (Red)"], loc="lower center")
     st.pyplot(fig)
 
 draw_compass(true_heading, mag_heading)
+
+# ─────────────────────────────────────────────────────
+# Drift Map Over Distance
+# ─────────────────────────────────────────────────────
+def draw_drift_map(variance_deg, max_range_km=5):
+    drift_m_per_km = np.tan(np.radians(abs(variance_deg))) * 1000
+    distances = np.arange(0, max_range_km + 1, 1)
+    ideal_path = np.zeros_like(distances)
+    drift_path = distances * drift_m_per_km / 1000  # drift in meters per km
+
+    fig, ax = plt.subplots()
+    ax.plot(distances, ideal_path, linestyle='--', label="True Path (Ideal)", color='gray')
+    ax.plot(distances, drift_path, label="Drifted Path (Magnetic)", color='red')
+    ax.set_title("📍 Simulated UAV Path Deviation")
+    ax.set_xlabel("Distance Flown (km)")
+    ax.set_ylabel("Lateral Drift (m)")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+draw_drift_map(variance)
 
 # ─────────────────────────────────────────────────────
 # Recalibrate Button
