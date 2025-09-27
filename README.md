@@ -1,3 +1,4 @@
+![UAV Compass Variance Simulator](./banner.png)
 # 🧭 UAV Compass Variance Simulator
 
 **Understand how compass variance impacts UAV navigation with this live, interactive Streamlit app.** Simulate interference, view drift in real-time, and export variance logs — ideal for drone engineers, UAV students, and field testers.
